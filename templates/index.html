@@ -3,6 +3,7 @@
 <head>
     <title>World Calendar</title>
     <style>
+        /* Existing styles preserved for Goan/Traditional aesthetic */
         :root {
             --gold: #ffcc00;
             --cyan: #44ffff;
@@ -58,13 +59,6 @@
             align-items: center;
         }
 
-        .controls-wheel {
-            display: flex;
-            justify-content: center;
-            gap: 15px;
-            margin: 20px 0;
-        }
-
         input {
             padding: 12px;
             border-radius: 10px;
@@ -73,11 +67,6 @@
             color: white;
             font-size: 1rem;
             outline: none;
-            cursor: pointer;
-        }
-        
-        input::-webkit-calendar-picker-indicator {
-            filter: invert(1);
             cursor: pointer;
         }
 
@@ -148,7 +137,7 @@
             padding-top: 5px;
         }
 
-        .card .val { color: var(--gold); font-weight: bold; }
+        .val { color: var(--gold); font-weight: bold; }
 
         .moon-box {
             width: 40px;
@@ -179,6 +168,13 @@
             border-radius: 50%;
         }
 
+        .controls-wheel {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin: 20px 0;
+        }
+
         .footer {
             text-align: center;
             margin-top: 30px;
@@ -196,8 +192,8 @@
         <form onsubmit="event.preventDefault(); manualCalculate();">
             <div class="form-row">
                 <button type="button" class="secondary" onclick="setCurrentTime()">Now</button>
-                <input type="date" id="inputDate" name="date" value="{{date}}" required onclick="this.showPicker()">
-                <input type="time" id="inputTime" name="time" value="{{time}}" required onclick="this.showPicker()">
+                <input type="date" id="inputDate" name="date" value="{{date}}" required>
+                <input type="time" id="inputTime" name="time" value="{{time}}" required>
                 <button type="submit">Calculate</button>
             </div>
         </form>
@@ -245,6 +241,7 @@
 
     {% if result %}
     <script>
+        // Use the safe tojson filter to prevent script injection or parsing errors
         let planets = {{ result.planet_longitudes | tojson }};
         let isPlaying = false;
 
@@ -283,23 +280,34 @@
         }
 
         async function loadDate(dateStr, timeStr) {
-            const res = await fetch(`/calculate_json?date=${dateStr}&time=${timeStr}`);
-            const data = await res.json();
-            document.getElementById("titleText").innerText = `Indian Calendar for ${dateStr} ${timeStr} IST`;
-            document.getElementById("mainPanel").innerHTML = `
-                <div class="card"><span>🌙 Lunar Month</span> <span class="val">${data.Lunar_month}</span></div>
-                <div class="card"><span>🌓 Paksha</span> <span class="val">${data.Paksha}</span></div>
-                <div class="card card-tithi">
-                    <div class="tithi-header"><span>📅 Tithi</span><div style="display:flex;align-items:center;gap:12px;"><span class="val">${data.Tithi}</span><div class="moon-box"><div id="moon-shadow"></div></div></div></div>
-                    <div class="tithi-times"><span>Starts: <span class="val" style="font-size:0.8rem;">${data.Tithi_start || '--'}</span></span><span>Ends: <span class="val" style="font-size:0.8rem;">${data.Tithi_end || '--'}</span></span></div>
-                </div>`;
-            document.getElementById("sidePanel").innerHTML = `
-                <div class="card"><span>⭐ Nakshatra</span> <span class="val">${data.Nakshatra}</span></div>
-                <div class="card"><span>☀️ Sun Rashi</span> <span class="val">${data.Sun_Rashi}</span></div>
-                <div class="card"><span>🌙 Moon Rashi</span> <span class="val">${data.Moon_Rashi}</span></div>`;
-            updateMoonPhase(new Date(dateStr + "T" + timeStr));
-            planets = data.planet_longitudes;
-            draw();
+            try {
+                const res = await fetch(`/calculate_json?date=${dateStr}&time=${timeStr}`);
+                if (!res.ok) throw new Error("Network response was not ok");
+                const data = await res.json();
+                
+                document.getElementById("titleText").innerText = `Indian Calendar for ${dateStr} ${timeStr} IST`;
+                
+                // Update Main Panel
+                document.getElementById("mainPanel").innerHTML = `
+                    <div class="card"><span>🌙 Lunar Month</span> <span class="val">${data.Lunar_month}</span></div>
+                    <div class="card"><span>🌓 Paksha</span> <span class="val">${data.Paksha}</span></div>
+                    <div class="card card-tithi">
+                        <div class="tithi-header"><span>📅 Tithi</span><div style="display:flex;align-items:center;gap:12px;"><span class="val">${data.Tithi}</span><div class="moon-box"><div id="moon-shadow"></div></div></div></div>
+                        <div class="tithi-times"><span>Starts: <span class="val" style="font-size:0.8rem;">${data.Tithi_start || '--'}</span></span><span>Ends: <span class="val" style="font-size:0.8rem;">${data.Tithi_end || '--'}</span></span></div>
+                    </div>`;
+                
+                // Update Side Panel
+                document.getElementById("sidePanel").innerHTML = `
+                    <div class="card"><span>⭐ Nakshatra</span> <span class="val">${data.Nakshatra}</span></div>
+                    <div class="card"><span>☀️ Sun Rashi</span> <span class="val">${data.Sun_Rashi}</span></div>
+                    <div class="card"><span>🌙 Moon Rashi</span> <span class="val">${data.Moon_Rashi}</span></div>`;
+                
+                updateMoonPhase(new Date(dateStr + "T" + timeStr));
+                planets = data.planet_longitudes;
+                draw();
+            } catch (err) {
+                console.error("Calculation Error:", err);
+            }
         }
 
         function togglePlay() { isPlaying = !isPlaying; document.getElementById("playBtn").innerText = isPlaying ? "⏸ Pause" : "▶ Play"; if (isPlaying) playLoop(); }
@@ -316,12 +324,14 @@
             let moonLong = planets["Moon"] || 0;
             let currentNakIdx = Math.floor(moonLong / nakSize);
 
+            // Draw Rashi Segments
             for (let i = 0; i < 12; i++) {
                 let sA = (i * 30 - 90) * Math.PI / 180, eA = ((i + 1) * 30 - 90) * Math.PI / 180;
                 ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, rashiRadius, sA, eA);
                 ctx.fillStyle = rashiColors[i]; ctx.fill();
             }
 
+            // Highlight Current Nakshatra
             let nStartA = (currentNakIdx * nakSize - 90) * Math.PI / 180, nEndA = ((currentNakIdx + 1) * nakSize - 90) * Math.PI / 180;
             ctx.save();
             ctx.beginPath(); ctx.arc(cx, cy, nakRadius, nStartA, nEndA);
@@ -329,6 +339,7 @@
             ctx.fillStyle = "rgba(255, 204, 0, 0.35)"; ctx.fill();
             ctx.restore();
 
+            // Draw Rashi Names and Lines
             ctx.setLineDash([]);
             ctx.strokeStyle = "rgba(0, 255, 204, 0.3)"; ctx.lineWidth = 1;
             for (let i = 0; i < 12; i++) {
@@ -338,22 +349,13 @@
                 let mid = (i * 30 + 15 - 90) * Math.PI / 180;
                 ctx.save(); ctx.translate(cx + (rashiRadius - 130) * Math.cos(mid), cy + (rashiRadius - 130) * Math.sin(mid));
                 ctx.rotate(mid + (mid > Math.PI/2 && mid < 3*Math.PI/2 ? Math.PI : 0));
-                
                 ctx.fillStyle = rashiColors[i].replace(/0\.\d+\)/, "1.0)"); 
                 ctx.font = "bold 13px Arial"; 
                 ctx.textAlign = "center";
-                ctx.shadowColor = "rgba(0,0,0,0.6)";
-                ctx.shadowBlur = 3;
-                
                 ctx.fillText(rashiNames[i].toUpperCase(), 0, 0); ctx.restore();
             }
 
-            ctx.shadowBlur = 0;
-            ctx.strokeStyle = "#00ffcc"; ctx.lineWidth = 2.5;
-            ctx.beginPath(); ctx.arc(cx, cy, rashiRadius, 0, 2 * Math.PI); ctx.stroke();
-            ctx.strokeStyle = "#ff4444";
-            ctx.beginPath(); ctx.arc(cx, cy, nakRadius, 0, 2 * Math.PI); ctx.stroke();
-
+            // Draw Nakshatra Ring
             for (let i = 0; i < 27; i++) {
                 let a = (i * nakSize - 90) * Math.PI / 180;
                 ctx.setLineDash([5, 5]); ctx.strokeStyle = "rgba(255, 102, 102, 0.6)";
@@ -370,6 +372,7 @@
                 ctx.fillText(nakshatraNames[i], 0, 0); ctx.restore();
             }
 
+            // Draw Planets
             ctx.setLineDash([]);
             for (let p in planets) {
                 let a = (planets[p] - 90) * Math.PI / 180;
@@ -384,19 +387,19 @@
                 ctx.save(); 
                 ctx.translate(cx + (rashiRadius - 40) * Math.cos(a), cy + (rashiRadius - 40) * Math.sin(a));
                 ctx.rotate(a + (a > Math.PI/2 && a < 3*Math.PI/2 ? Math.PI : 0));
-                
-                ctx.font = "14px Arial"; 
-                ctx.textAlign = "center"; 
-                ctx.fillStyle = "#ffffff"; 
-                ctx.shadowColor = "black";
-                ctx.shadowBlur = 6; 
+                ctx.font = "14px Arial"; ctx.textAlign = "center"; ctx.fillStyle = "#ffffff"; 
                 ctx.fillText(p, 0, 4); 
                 ctx.restore();
             }
         }
         
-        const initD = document.getElementById('inputDate').value, initT = document.getElementById('inputTime').value;
-        updateMoonPhase(new Date(initD + "T" + initT)); draw();
+        // Initial Draw
+        const initD = document.getElementById('inputDate').value;
+        const initT = document.getElementById('inputTime').value;
+        if (initD && initT) {
+            updateMoonPhase(new Date(initD + "T" + initT)); 
+            draw();
+        }
     </script>
     {% endif %}
 </body>
